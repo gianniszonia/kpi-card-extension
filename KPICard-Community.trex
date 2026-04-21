@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest manifest-version="0.1" xmlns="http://www.tableau.com/xml/extension_manifest">
+  <worksheet-extension id="com.kpicard.viz.extension" extension-version="1.2.0">
+    <default-locale>en_US</default-locale>
+    <name resource-id="name"/>
+    <description>A modern KPI card in seconds.</description>
+    <author
+      name="Giannis Zonia"
+      email="yzonia@gmail.com"
+      organization=""
+      website="https://gianniszonia.github.io/kpi-card-extension/"/>
+    <min-api-version>1.1</min-api-version>
+    <source-location>
+      <url>https://gianniszonia.github.io/kpi-card-extension/kpi-card.html</url>
+    </source-location>
+    <icon/>
+    <context-menu>
+      <configure-context-menu-item />
+    </context-menu>
+    <encoding id="measure">
+      <display-name resource-id="measure-label">Measure</display-name>
+      <role-spec><role-type>continuous-measure</role-type></role-spec>
+      <fields max-count="1"/>
+      <encoding-icon token="letter-y"/>
+    </encoding>
+    <encoding id="date">
+      <display-name resource-id="date-label">Date</display-name>
+      <role-spec>
+        <role-type>discrete-dimension</role-type>
+        <role-type>continuous-dimension</role-type>
+      </role-spec>
+      <fields max-count="1"/>
+      <encoding-icon token="letter-x"/>
+    </encoding>
+  </worksheet-extension>
+  <resources>
+    <resource id="name"><text locale="en_US">KPI Card - Community</text></resource>
+    <resource id="measure-label"><text locale="en_US">Measure</text></resource>
+    <resource id="date-label"><text locale="en_US">Date</text></resource>
+  </resources>
+</manifest>
