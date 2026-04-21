@@ -17,8 +17,8 @@ The extension is hosted through GitHub Pages and can be distributed to the commu
 ## Install In Tableau
 
 1. Download `KPICard-Community.trex` from this repository.
-2. In Tableau, add a `Viz Extension` object to a dashboard.
-3. Choose `My Extensions`.
+2. In a Tableau worksheet, click the marks card drop down and click `Add Extension`.
+3. Choose `Access Local Viz Extensions`.
 4. Select the downloaded `KPICard-Community.trex` file.
 5. Configure the extension by assigning:
    - a `Measure`
