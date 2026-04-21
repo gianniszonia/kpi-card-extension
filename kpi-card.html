@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KPI Card - Viz Extension</title>
+  <script src="./lib/tableau.extensions.1.latest.js"></script>
+  <style>
+    @font-face{
+      font-family:'DM Sans';
+      src:url('./fonts/DMSans-Regular.ttf') format('truetype');
+      font-weight:400;
+      font-style:normal;
+    }
+    @font-face{
+      font-family:'DM Sans';
+      src:url('./fonts/DMSans-Medium.ttf') format('truetype');
+      font-weight:500;
+      font-style:normal;
+    }
+    @font-face{
+      font-family:'DM Sans';
+      src:url('./fonts/DMSans-SemiBold.ttf') format('truetype');
+      font-weight:600;
+      font-style:normal;
+    }
+    @font-face{
+      font-family:'DM Sans';
+      src:url('./fonts/DMSans-Bold.ttf') format('truetype');
+      font-weight:700;
+      font-style:normal;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:#ffffff;
+      --metric-accent:#4996b2;
+      --setup-accent:#4996b2;
+      --divider-color:#eeeeee;
+      --card-radius:20px;
+      --card-shadow:0 2px 5px rgba(0,0,0,.10);
+      --label-size:15px;
+      --metric-icon-size:25px;
+      --pagination-color:#666666;
+      --pagination-size:14px;
+      --font:'DM Sans',-apple-system,BlinkMacSystemFont,sans-serif;
+    }
+    html,body{width:100%;height:100%;overflow:hidden;font-family:var(--font);background:transparent;-webkit-font-smoothing:antialiased}
+
+    .wrapper{width:100%;height:100%;padding:15px;display:flex;background:var(--wrapper-bg,transparent)}
+    .cards-grid{width:100%;height:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));grid-auto-rows:minmax(0,1fr);gap:14px;align-items:stretch}
+    .card{position:relative;flex:1;background:var(--bg);border-radius:var(--card-radius);box-shadow:var(--card-shadow);color:var(--title-color,#333333);display:flex;flex-direction:column;overflow:hidden;cursor:default;min-height:0;height:100%}
+
+    /* ─── HEADER ─── */
+    .card-header{padding:var(--header-pad-top,22px) var(--header-pad-x,26px) 0;flex:0 0 auto}
+    .metric-row{display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:100%;font-size:var(--label-size);position:relative}
+    .metric-meta{display:flex;align-items:center;gap:.75em;min-width:0;flex:1}
+    .metric-accent{width:.34em;min-width:.34em;height:1.25em;border-radius:999px;background:var(--metric-accent);box-shadow:inset 0 0 0 1px rgba(0,0,0,.03)}
+    .kpi-label{font-size:1em;color:var(--title-color,#333333);letter-spacing:-.01em;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .metric-icon{width:var(--metric-icon-size);height:var(--metric-icon-size);object-fit:contain;flex:0 0 auto}
+
+    .gear-btn{background:none;border:none;cursor:pointer;padding:4px;border-radius:6px;opacity:0;transition:opacity .2s;flex:0 0 auto;line-height:0}
+    .gear-btn svg{width:16px;height:16px;display:block}
+    .gear-btn:hover{background:rgba(0,0,0,.05)}
+    .card:hover .gear-btn{opacity:1}
+
+    /* Fix #4: divider spans full card width */
+    .divider-line{width:calc(100% + var(--header-pad-x,26px)*2);margin-left:calc(var(--header-pad-x,26px)*-1);height:1px;background:var(--divider-color);margin-top:var(--divider-mt,12px);flex:0 0 auto}
+    .divider-line.hidden-line{background:transparent;margin-top:var(--divider-mt,12px)}
+
+    /* ─── CAROUSEL ─── */
+    .carousel-viewport{flex:1;overflow:hidden;position:relative;min-height:0}
+    .carousel-strip{display:flex;flex-direction:var(--strip-direction,row);height:100%;transition:transform .35s cubic-bezier(.4,0,.2,1);will-change:transform}
+    .carousel-page{flex:0 0 100%;width:100%;height:100%;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:var(--page-direction,column);gap:var(--widget-gap,12px);padding:var(--page-pad-top,16px) var(--page-pad-right,26px) var(--page-pad-bottom,8px) var(--page-pad-left,26px)}
+    .widget-slot{width:100%;min-width:0;display:flex;flex-direction:column;flex:0 0 auto}
+    .widget-slot.chart-slot{flex:1 1 0;min-height:120px}
+    .widget-slot.chart-slot>*{flex:1 1 auto;min-height:0}
+    .widget-slot.divider-slot{flex:0 0 auto}
+
+    /* ─── PAGINATION ─── Fix #11: arrows match size */
+    .pagination{display:flex;align-items:center;justify-content:center;gap:2px;padding:0 0 var(--pag-pad-bottom,10px);flex:0 0 auto;user-select:none}
+    .pag-btn{background:none;border:none;cursor:pointer;color:var(--pagination-color);font-family:var(--font);font-weight:700;padding:4px 4px;line-height:1;transition:opacity .15s;font-size:0}
+    .pag-btn svg{width:calc(var(--pagination-size) * 1.2);height:calc(var(--pagination-size) * 1.2);display:block}
+    .pag-btn:hover{opacity:.6}
+    .pag-btn.invisible{visibility:hidden;pointer-events:none}
+    .pag-indicator{font-size:var(--pagination-size);color:var(--pagination-color);font-weight:600;letter-spacing:.02em}
+
+    /* ─── KPI SUMMARY ─── */
+    .w-kpi{display:flex;flex-direction:column;align-items:flex-start;gap:0;width:100%;position:relative}
+    .w-kpi-top{position:absolute;top:.15em;right:0;display:flex;justify-content:flex-end;align-items:center}
+    .w-kpi-top.date-only{position:static;top:auto;right:auto;justify-content:flex-start;align-items:flex-start;width:100%;min-height:var(--kpi-primary-reserve,30px);margin-top:.15em}
+    .w-kpi-top.date-only .w-kpi-last-date{text-align:left}
+    .w-kpi-last-date{font-weight:600;letter-spacing:-.01em;line-height:1;text-align:right}
+    .w-kpi-value{font-weight:700;letter-spacing:-.04em;line-height:.95}
+    .w-kpi-deltas{display:flex;flex-direction:column;gap:8px;align-items:flex-start;margin-top:var(--delta-mt,14px)}
+    .delta-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-height:24px}
+    .kpi-delta{display:inline-flex;align-items:center;justify-content:center;font-weight:700;padding:2px 8px;border-radius:6px;line-height:1.1;min-width:52px}
+    .kpi-delta.positive{color:var(--dp);background:var(--dp-bg)}
+    .kpi-delta.negative{color:var(--dn);background:var(--dn-bg)}
+    .delta-text{font-weight:500;letter-spacing:-.01em}
+
+    .target-wrap{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:var(--target-mt,14px)}
+    .target-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .target-text{font-weight:500;letter-spacing:-.01em;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .target-value{font-weight:500;letter-spacing:-.01em;flex:0 0 auto}
+    .target-viz{position:relative;width:100%;height:16px;overflow:visible}
+    .target-track{position:absolute;left:0;top:50%;height:12px;border-radius:999px;transform:translateY(-50%);overflow:visible;z-index:1}
+    .target-fill{position:absolute;left:0;top:50%;height:6px;width:0;transform:translateY(-50%);border-radius:999px;transition:width .45s cubic-bezier(.4,0,.2,1);z-index:2}
+    .target-marker{position:absolute;right:0;top:50%;width:2px;height:12px;border-radius:999px;transform:translateY(-50%);z-index:3}
+
+    /* ─── YTD SUMMARY ─── Fix #2: left-aligned, Fix #12: top-aligned, compact */
+    .w-ytd{display:flex;flex-direction:var(--ytd-direction,row);align-items:stretch;gap:0;width:100%}
+    .w-ytd-cell{flex:1;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:4px;padding:6px 8px;text-align:left;position:relative}
+    .w-ytd-cell + .w-ytd-cell::before{content:'';position:absolute;left:0;top:10%;height:80%;width:1px;background:var(--divider-color)}
+    .w-ytd.ytd-vertical .w-ytd-cell + .w-ytd-cell::before{left:10%;top:0;height:1px;width:80%}
+    .w-ytd-label{font-weight:500;letter-spacing:.02em;line-height:1.25}
+    .w-ytd-value{font-weight:700;letter-spacing:-.02em;line-height:1.1}
+
+    /* ─── BAR CHART ─── Fix #3,#6: fill available space */
+    .w-bars{display:flex;align-items:flex-end;justify-content:center;gap:8px;width:100%;padding:0 0 4px;flex:1 1 auto;min-height:0}
+    .w-bars-shell{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:0;overflow:hidden}
+    .w-bars-legend{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+    .w-bars-shell.legend-top-left .w-bars-legend{justify-content:flex-start;flex-direction:column;flex-wrap:nowrap}
+    .w-bars-shell.legend-top-right .w-bars-legend{justify-content:flex-start;align-self:flex-end;flex-direction:column;flex-wrap:nowrap}
+    .w-bars-shell.legend-top .w-bars-legend{justify-content:flex-start;flex-direction:row;flex-wrap:wrap}
+    .bar-legend-item{display:flex;align-items:center;gap:6px;font-size:11px;color:#666;font-weight:400;line-height:1.2}
+    .bar-legend-swatch{width:10px;height:10px;border-radius:999px;display:inline-block;flex:0 0 auto}
+    .bar-col{display:flex;flex-direction:column;align-items:center;gap:3px;justify-content:flex-end;height:100%;flex:1;min-width:0;max-width:64px;cursor:pointer}
+    .bar-col:hover .bar{filter:brightness(1.1)}
+    .bar-val{font-weight:600;white-space:nowrap;position:absolute;left:50%;transform:translateX(-50%);bottom:0;z-index:3;pointer-events:none;transition:top .50s cubic-bezier(.34,1.56,.64,1)}
+    .bar-plot{position:relative;display:flex;align-items:flex-end;justify-content:center;flex:1 1 auto;width:100%;min-height:30px;overflow:visible}
+    .bar-target-line{position:absolute;left:10%;width:80%;height:0;pointer-events:none;z-index:2}
+    .bar{position:relative;z-index:1;min-height:4px;flex:0 0 auto;width:80%;transition:height .50s cubic-bezier(.34,1.56,.64,1)}
+    .bar-seg{transition:top .50s cubic-bezier(.34,1.56,.64,1),height .50s cubic-bezier(.34,1.56,.64,1)}
+    .bar-month{text-transform:uppercase;letter-spacing:.06em;font-weight:600;padding-bottom:4px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:100%;text-align:center;line-height:1.1}
+
+    /* ─── LINE CHART ─── Fix #3,#6: fill available space */
+    .w-line{flex:1 1 auto;min-height:0;padding:0;margin-left:calc(var(--header-pad-x,26px)*-0.77);margin-right:calc(var(--header-pad-x,26px)*-0.77);width:calc(100% + var(--header-pad-x,26px)*1.54)}
+    .w-line svg{width:100%;height:100%;display:block}
+    .w-radial{flex:1 1 auto;min-height:0;width:100%;height:100%;display:block;overflow:hidden}
+    .w-radial svg{width:100%;height:100%;display:block;overflow:visible}
+    .w-divider{width:calc(100% + var(--header-pad-x,26px)*2);margin-left:calc(var(--header-pad-x,26px)*-1);display:flex;justify-content:center}
+    .w-divider-line{height:0;max-width:100%}
+
+    /* ─── SETUP / INSTRUCTIONS ─── */
+    .setup-msg{position:absolute;inset:0;z-index:10;background:var(--bg);border-radius:var(--card-radius);display:flex;overflow:hidden}
+    .setup-cols{position:relative;width:100%;height:100%;min-height:0}
+    .setup-left{width:68%;height:50%;padding:clamp(16px,3.2%,40px) clamp(20px,3.5%,44px) clamp(16px,2.2vh,22px);display:flex;flex-direction:column;overflow:auto;gap:clamp(18px,2.4vh,34px)}
+    .setup-right{position:absolute;top:0;right:0;width:32%;height:50%;background:rgba(0,0,0,.025);border:1px solid rgba(0,0,0,.06);border-radius:12px;padding:clamp(20px,4%,48px) clamp(18px,3%,40px);display:flex;flex-direction:column;gap:clamp(14px,2vh,22px);overflow:auto}
+    .setup-title{font-size:clamp(1.3rem,2.2vw,2rem);font-weight:700;color:#1a1a2e;letter-spacing:-.03em;display:flex;align-items:center;gap:10px}
+    .setup-title .st-accent{width:5px;height:clamp(22px,2.4vw,32px);border-radius:999px;background:var(--setup-accent)}
+    .setup-left > div:nth-child(2){margin-top:clamp(8px,1.6vh,16px)}
+    .setup-subtitle{font-size:clamp(.8rem,1vw,1rem);font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#999;margin-bottom:6px}
+    .setup-steps{display:flex;flex-direction:column;gap:clamp(18px,2.4vh,28px);margin-top:16px}
+    .setup-step{display:flex;align-items:center;gap:clamp(10px,1.2vw,16px)}
+    .step-num{width:clamp(26px,2.5vw,36px);height:clamp(26px,2.5vw,36px);border-radius:50%;background:var(--setup-accent);color:#fff;font-size:clamp(.75rem,1vw,1rem);font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto;margin-top:2px}
+    .step-text{font-size:clamp(.9rem,1.15vw,1.15rem);color:#444;line-height:1.5;font-weight:400}
+    .step-text b{font-weight:600;color:#222}
+    .widget-previews{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:clamp(8px,.8vw,14px);flex:1;min-height:0}
+    .setup-left > div:last-child{position:absolute;left:clamp(20px,3.5%,44px);right:clamp(20px,3.5%,44px);top:calc(50% + 10px);bottom:clamp(18px,3vh,28px);display:flex;flex-direction:column;min-height:0}
+    .setup-left > div:last-child > .setup-subtitle{margin-top:-14px;margin-bottom:14px}
+    .wp-card{background:#fff;border:1px solid rgba(0,0,0,.07);border-radius:12px;padding:clamp(10px,1.1vw,16px) clamp(12px,1.25vw,18px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:clamp(4px,.7vh,8px);min-height:0;overflow:hidden}
+    .wp-card.wide,.wp-card.tall{grid-column:auto}
+    .wp-card svg{width:100%;height:100%;flex:1 1 auto;min-height:0;overflow:visible}
+    .wp-card-label{font-size:clamp(.78rem,1vw,1rem);font-weight:600;color:#777;letter-spacing:.02em;line-height:1.1}
+    .setup-info-block{display:flex;flex-direction:column;gap:6px}
+    .setup-info-block p{font-size:clamp(.9rem,1.1vw,1.1rem);color:#555;line-height:1.55;font-weight:400;margin:0}
+    .setup-info-block p b{font-weight:600;color:#333}
+    .setup-features{display:flex;flex-direction:column;gap:clamp(6px,1vh,12px);margin-top:4px}
+    .setup-feat{display:flex;align-items:center;gap:8px;font-size:clamp(.85rem,1.05vw,1.05rem);color:#555;line-height:1.45}
+    .setup-feat svg{width:clamp(16px,1.4vw,22px);height:clamp(16px,1.4vw,22px);flex:0 0 auto}
+    .setup-tip{margin-top:auto;font-size:clamp(.85rem,1.05vw,1.05rem);font-weight:400;color:#888;line-height:1.45}
+    .setup-tip b{color:#666}
+
+    /* ─── TOOLTIP ─── */
+    .chart-tooltip{position:fixed;pointer-events:none;background:rgba(30,30,40,.92);color:#fff;font-family:var(--font);font-size:12px;font-weight:500;padding:8px 12px;border-radius:8px;white-space:nowrap;z-index:100;opacity:0;transition:opacity .12s;line-height:1.4;letter-spacing:-.01em;box-shadow:0 4px 12px rgba(0,0,0,.18)}
+    .chart-tooltip.visible{opacity:1}
+    .chart-tooltip .tt-label{font-weight:400;color:rgba(255,255,255,.7);font-size:.70rem}
+
+    /* ─── ERROR MESSAGE ─── */
+    .err-wrap{display:flex;align-items:center;justify-content:center;width:100%;height:100%;padding:40px;text-align:center}
+    .err-title{font-size:clamp(1.1rem,1.8vw,1.6rem);font-weight:700;color:#1a1a2e;margin-bottom:12px;letter-spacing:-.02em}
+    .err-body{font-size:clamp(1rem,1.3vw,1.22rem);color:#555;line-height:1.6;max-width:480px}
+
+    /* ─── DARK THEME OVERRIDES ─── */
+    body.theme-dark .chart-tooltip{background:rgba(240,240,250,.95);color:#1a1a2e;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+    body.theme-dark .chart-tooltip .tt-label{color:rgba(30,30,46,.65)}
+    body.theme-dark .bar-legend-item{color:#b0b0b8}
+    body.theme-dark .err-title{color:#f9fafb}
+    body.theme-dark .err-body{color:#e5e7eb}
+    body.theme-dark .err-body b{color:#f3f4f6}
+    body.theme-dark .setup-title{color:#f9fafb}
+    body.theme-dark .setup-title span[style]{color:#e5e7eb!important}
+    body.theme-dark .setup-subtitle{color:#e5e7eb}
+    body.theme-dark .step-text{color:#e5e7eb}
+    body.theme-dark .step-text b{color:#f9fafb}
+    body.theme-dark .setup-right{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.08)}
+    body.theme-dark .wp-card{background:#2a2a3e;border-color:rgba(255,255,255,.08)}
+    body.theme-dark .wp-card-label{color:#e5e7eb}
+    body.theme-dark .setup-info-block p{color:#e5e7eb}
+    body.theme-dark .setup-info-block p b{color:#f9fafb}
+    body.theme-dark .setup-feat{color:#e5e7eb}
+    body.theme-dark .setup-tip{color:#e5e7eb}
+    body.theme-dark .setup-tip b{color:#f3f4f6}
+    body.theme-dark .gear-btn svg{fill:#e5e7eb}
+    /* Setup preview SVG color overrides */
+    body.theme-dark .wp-card svg text[fill="#333"]{fill:#f9fafb}
+    body.theme-dark .wp-card svg text[fill="#666"]{fill:#e5e7eb}
+    body.theme-dark .wp-card svg text[fill="#999"]{fill:#e5e7eb}
+    body.theme-dark .wp-card svg text[fill="#8b8b94"]{fill:#e5e7eb}
+    body.theme-dark .wp-card svg text[fill="#7f7f87"]{fill:#e5e7eb}
+    body.theme-dark .wp-card svg rect[fill="#e5e7eb"]{fill:#3a3a4e}
+    body.theme-dark .wp-card svg line[stroke="#e5e7eb"]{stroke:#3a3a4e}
+    body.theme-dark .wp-card svg rect[fill="#ccc"]{fill:#6b7280}
+    body.theme-dark .wp-card svg path[fill="#102127"]{fill:#164e63}
+    body.theme-dark .wp-card svg path[fill="#071318"]{fill:#0a3f52}
+    body.theme-dark .wp-card svg line[stroke="#102127"]{stroke:#60bfdb}
+    body.theme-dark .gear-btn:hover{background:rgba(255,255,255,.08)}
+
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="cards-grid hidden" id="cardsGrid"></div>
+    <div class="card" id="card">
+      <div class="setup-msg" id="setupMsg">
+        <div class="setup-cols">
+          <div class="setup-left">
+            <div class="setup-title"><span class="st-accent"></span>KPI Card Extension <span style="color:#777;font-weight:500"> — Developed by Giannis Zonia</span></div>
+            <div>
+              <div class="setup-subtitle">Getting Started</div>
+              <div class="setup-steps">
+                <div class="setup-step"><span class="step-num">1</span><span class="step-text">Drag a <b>Date</b> field onto the <b>Date</b> encoding tile on the Marks card. The date must be <b>continuous</b> (green pill). Supports <b>hourly, daily, weekly, monthly,</b> and <b>yearly</b> granularity (auto-detected).</span></div>
+                <div class="setup-step"><span class="step-num">2</span><span class="step-text">Drag your main <b>Measure</b> onto the <b>Measure</b> encoding tile.</span></div>
+                <div class="setup-step"><span class="step-num">3</span><span class="step-text">Optionally, add a <b>dimension</b> to <b>Detail</b> to automatically break the card into multiple cards, or add a <b>target measure</b> / extra fields to <b>Detail</b> for target tracking, segmentation, coloring and tooltip context.</span></div>
+                <div class="setup-step"><span class="step-num">4</span><span class="step-text">Click <b>Format Extension</b> on the Marks card to configure widgets, pages, and styling.</span></div>
+              </div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;min-height:0">
+              <div class="setup-subtitle">Available Widgets</div>
+              <div class="widget-previews">
+                <div class="wp-card tall">
+                  <svg viewBox="0 0 200 118" xmlns="http://www.w3.org/2000/svg">
+                    <text x="14" y="32" font-size="28" font-weight="700" fill="#333" font-family="var(--font)">$5.2M</text>
+                    <rect x="14" y="46" width="52" height="18" rx="6" fill="rgba(34,197,94,.12)"/>
+                    <text x="22" y="58" font-size="10.5" font-weight="700" fill="#22c55e" font-family="var(--font)">+12.3%</text>
+                    <text x="72" y="58" font-size="10" fill="#8b8b94" font-family="var(--font)">vs prev month</text>
+                    <rect x="14" y="70" width="46" height="18" rx="6" fill="rgba(239,68,68,.1)"/>
+                    <text x="22" y="82" font-size="10.5" font-weight="700" fill="#ef4444" font-family="var(--font)">-3.1%</text>
+                    <text x="66" y="82" font-size="10" fill="#8b8b94" font-family="var(--font)">vs prev year</text>
+                    <text x="14" y="102" font-size="10" fill="#7f7f87" font-weight="500" font-family="var(--font)">72% of target</text>
+                    <text x="170" y="102" font-size="10" fill="#7f7f87" font-weight="500" text-anchor="end" font-family="var(--font)">$7.2M</text>
+                    <rect x="14" y="108" width="156" height="8" rx="4" fill="#e5e7eb"/>
+                    <rect x="14" y="108" width="118" height="8" rx="4" fill="var(--setup-accent)"/>
+                  </svg>
+                  <span class="wp-card-label">KPI Summary</span>
+                </div>
+                <div class="wp-card tall">
+                  <svg viewBox="0 0 200 118" xmlns="http://www.w3.org/2000/svg">
+                    <line x1="68" y1="34" x2="68" y2="84" stroke="#e5e7eb" stroke-width="1"/>
+                    <line x1="140" y1="34" x2="140" y2="84" stroke="#e5e7eb" stroke-width="1"/>
+                    <text x="24" y="48" font-size="10" fill="#999" font-weight="600" text-anchor="middle" font-family="var(--font)">YTD</text>
+                    <text x="24" y="76" font-size="17" font-weight="700" fill="#333" text-anchor="middle" font-family="var(--font)">$32.1M</text>
+                    <text x="104" y="48" font-size="10" fill="#999" font-weight="600" text-anchor="middle" font-family="var(--font)">% of Target</text>
+                    <text x="104" y="76" font-size="17" font-weight="700" fill="#333" text-anchor="middle" font-family="var(--font)">78.4%</text>
+                    <text x="176" y="48" font-size="10" fill="#999" font-weight="600" text-anchor="middle" font-family="var(--font)">vs Previous</text>
+                    <text x="176" y="76" font-size="17" font-weight="700" fill="#22c55e" text-anchor="middle" font-family="var(--font)">+6.2%</text>
+                  </svg>
+                  <span class="wp-card-label">YTD Summary</span>
+                </div>
+                <div class="wp-card tall">
+                  <svg viewBox="0 0 200 102" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="118" cy="60" r="34" fill="none" stroke="#e5e7eb" stroke-width="8" stroke-dasharray="160 220" stroke-linecap="round" transform="rotate(-90 118 60)"/>
+                    <circle cx="118" cy="60" r="34" fill="none" stroke="var(--setup-accent)" stroke-width="8" stroke-dasharray="116 220" stroke-linecap="round" transform="rotate(-90 118 60)"/>
+                    <circle cx="118" cy="60" r="22" fill="none" stroke="#e5e7eb" stroke-width="8" stroke-dasharray="104 140" stroke-linecap="round" transform="rotate(-90 118 60)"/>
+                    <circle cx="118" cy="60" r="22" fill="none" stroke="#22c55e" stroke-width="8" stroke-dasharray="58 140" stroke-linecap="round" transform="rotate(-90 118 60)"/>
+                    <text x="82" y="28" font-size="8.5" fill="#666" text-anchor="end" font-family="var(--font)">Standard: 31K</text>
+                    <text x="82" y="44" font-size="8.5" fill="#666" text-anchor="end" font-family="var(--font)">First: 9K</text>
+                  </svg>
+                  <span class="wp-card-label">Radial Bar Chart</span>
+                </div>
+                <div class="wp-card">
+                  <svg viewBox="0 0 200 110" xmlns="http://www.w3.org/2000/svg">
+                    <defs><linearGradient id="setupFunnelGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4996b2"/><stop offset="100%" stop-color="#8fd3e8"/></linearGradient></defs>
+                    <text x="36" y="26" font-size="8" fill="#666" text-anchor="end" font-family="var(--font)">Visits 24K</text>
+                    <text x="36" y="52" font-size="8" fill="#666" text-anchor="end" font-family="var(--font)">Checkout 11K</text>
+                    <text x="36" y="78" font-size="8" fill="#666" text-anchor="end" font-family="var(--font)">Paid 5K</text>
+                    <path d="M56,18 C72,16 86,16 100,16 C114,16 128,16 144,18 C142,28 134,33 126,37 C118,41 109,43 100,43 C91,43 82,41 74,37 C66,33 58,28 56,18 Z" fill="url(#setupFunnelGrad)"/>
+                    <path d="M74,37 C82,41 91,43 100,43 C109,43 118,41 126,37 C123,46 118,49 113,53 C109,56 105,58 100,58 C95,58 91,56 87,53 C82,49 77,46 74,37 Z" fill="#67bbd7"/>
+                    <path d="M87,53 C91,56 95,58 100,58 C105,58 109,56 113,53 C111,61 108,64 105,67 C103,69 101,70 100,70 C99,70 97,69 95,67 C92,64 89,61 87,53 Z" fill="#102127"/>
+                    <path d="M95,67 C97,69 99,70 100,70 C101,70 103,69 105,67 C104,72 103,75 102,78 C101.4,80 100.7,81 100,81 C99.3,81 98.6,80 98,78 C97,75 96,72 95,67 Z" fill="#071318"/>
+                  </svg>
+                  <span class="wp-card-label">Funnel Chart</span>
+                </div>
+                <div class="wp-card wide">
+                  <svg viewBox="0 0 200 102" xmlns="http://www.w3.org/2000/svg">
+                    <text x="22" y="18" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">4.1M</text>
+                    <rect x="10" y="24" width="20" height="54" rx="6" fill="var(--setup-accent)" opacity=".4"/>
+                    <text x="20" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">JUL</text>
+                    <text x="52" y="26" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">4.8M</text>
+                    <rect x="42" y="32" width="20" height="46" rx="6" fill="var(--setup-accent)" opacity=".5"/>
+                    <text x="52" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">AUG</text>
+                    <text x="82" y="16" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">5.6M</text>
+                    <rect x="72" y="22" width="20" height="56" rx="6" fill="var(--setup-accent)" opacity=".6"/>
+                    <text x="82" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">SEP</text>
+                    <text x="112" y="30" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">4.5M</text>
+                    <rect x="102" y="36" width="20" height="42" rx="6" fill="var(--setup-accent)" opacity=".7"/>
+                    <text x="112" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">OCT</text>
+                    <text x="144" y="14" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">5.9M</text>
+                    <rect x="134" y="20" width="20" height="58" rx="6" fill="var(--setup-accent)" opacity=".85"/>
+                    <text x="144" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">NOV</text>
+                    <text x="174" y="10" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">6.3M</text>
+                    <rect x="164" y="14" width="20" height="64" rx="6" fill="var(--setup-accent)"/>
+                    <text x="174" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">DEC</text>
+                  </svg>
+                  <span class="wp-card-label">Bar Chart</span>
+                </div>
+                <div class="wp-card wide">
+                  <svg viewBox="0 0 200 102" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="10" y="38" width="20" height="40" rx="4" fill="#22c55e"/>
+                    <line x1="30" y1="38" x2="42" y2="38" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,2"/>
+                    <rect x="42" y="24" width="20" height="14" rx="4" fill="#22c55e"/>
+                    <line x1="62" y1="24" x2="74" y2="24" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,2"/>
+                    <rect x="74" y="24" width="20" height="20" rx="4" fill="#ef4444"/>
+                    <line x1="94" y1="44" x2="106" y2="44" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,2"/>
+                    <rect x="106" y="30" width="20" height="14" rx="4" fill="#22c55e"/>
+                    <line x1="126" y1="30" x2="138" y2="30" stroke="#e5e7eb" stroke-width="1" stroke-dasharray="3,2"/>
+                    <rect x="138" y="30" width="20" height="10" rx="4" fill="#ef4444"/>
+                    <rect x="168" y="40" width="20" height="38" rx="4" fill="#ccc"/>
+                    <text x="20" y="32" font-size="7" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">2.5K</text>
+                    <text x="52" y="18" font-size="7" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">900</text>
+                    <text x="84" y="50" font-size="7" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">-1.2K</text>
+                    <text x="178" y="34" font-size="7" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">2.4K</text>
+                    <text x="20" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">JAN</text>
+                    <text x="52" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">FEB</text>
+                    <text x="84" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">MAR</text>
+                    <text x="116" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">APR</text>
+                    <text x="148" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">MAY</text>
+                    <text x="178" y="96" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">Total</text>
+                  </svg>
+                  <span class="wp-card-label">Waterfall Chart</span>
+                </div>
+                <div class="wp-card wide">
+                  <svg viewBox="0 0 200 102" xmlns="http://www.w3.org/2000/svg">
+                    <defs><linearGradient id="spg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--setup-accent)" stop-opacity=".3"/><stop offset="100%" stop-color="var(--setup-accent)" stop-opacity=".02"/></linearGradient></defs>
+                    <path d="M14,62 C34,56 44,30 66,34 C88,38 100,18 126,20 C150,22 162,12 184,14 L184,82 L14,82 Z" fill="url(#spg)"/>
+                    <path d="M14,62 C34,56 44,30 66,34 C88,38 100,18 126,20 C150,22 162,12 184,14" fill="none" stroke="var(--setup-accent)" stroke-width="2.5" stroke-linecap="round"/>
+                    <circle cx="14" cy="62" r="4" fill="var(--setup-accent)"/><circle cx="66" cy="34" r="4" fill="var(--setup-accent)"/><circle cx="126" cy="20" r="4" fill="var(--setup-accent)"/><circle cx="184" cy="14" r="4" fill="var(--setup-accent)"/>
+                    <text x="14" y="52" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">3.2M</text>
+                    <text x="66" y="24" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">4.1M</text>
+                    <text x="126" y="10" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">5.0M</text>
+                    <text x="184" y="8" font-size="8" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">5.8M</text>
+                    <text x="14" y="98" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">SEP</text>
+                    <text x="66" y="98" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">OCT</text>
+                    <text x="126" y="98" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">NOV</text>
+                    <text x="184" y="98" font-size="8" fill="#999" text-anchor="middle" font-weight="600" font-family="var(--font)">DEC</text>
+                  </svg>
+                  <span class="wp-card-label">Line Chart</span>
+                </div>
+                <div class="wp-card">
+                  <svg viewBox="0 0 200 102" xmlns="http://www.w3.org/2000/svg">
+                    <text x="21" y="48" font-size="7.5" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">12K</text>
+                    <rect x="12" y="54" width="18" height="24" rx="5" fill="#6ba7c0"/>
+                    <text x="47" y="38" font-size="7.5" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">18K</text>
+                    <rect x="38" y="44" width="18" height="34" rx="5" fill="#7fb4ca"/>
+                    <text x="73" y="24" font-size="7.5" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">25K</text>
+                    <rect x="64" y="30" width="18" height="48" rx="5" fill="#95c4d6"/>
+                    <line x1="96" y1="14" x2="96" y2="84" stroke="#102127" stroke-width="4" stroke-linecap="round"/>
+                    <path d="M116,70 C126,64 134,40 146,42 C158,44 164,24 176,28" fill="none" stroke="#4996b2" stroke-width="4" stroke-linecap="round"/>
+                    <text x="116" y="80" font-size="7.5" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">9K</text>
+                    <text x="146" y="36" font-size="7.5" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">15K</text>
+                    <text x="176" y="20" font-size="7.5" font-weight="700" fill="#666" text-anchor="middle" font-family="var(--font)">21K</text>
+                    <circle cx="116" cy="70" r="3.5" fill="#4996b2"/><circle cx="146" cy="42" r="3.5" fill="#4996b2"/><circle cx="176" cy="28" r="3.5" fill="#4996b2"/>
+                  </svg>
+                  <span class="wp-card-label">Divider Line</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="setup-right">
+            <div class="setup-info-block">
+              <div class="setup-subtitle">About</div>
+              <p>A flexible, all-in-one KPI card extension for Tableau. Combine headline metrics, comparisons, targets, and charts into a single configurable card with automatic date granularity detection, rich formatting, and flexible multi-widget layouts.</p>
+            </div>
+            <div class="setup-info-block">
+              <div class="setup-subtitle">Key Features</div>
+              <div class="setup-features">
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>8 widget types: KPI Summary, Period-to-Date, Bar Chart, Waterfall Chart, Line Chart, Radial Bar Chart, Funnel Chart, Divider Line</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Auto-detects granularity: hourly, daily, weekly, monthly, yearly</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Split cards by any dimension with per-card overrides</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Color bars by dimension or positive/negative values</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Multi-page carousel with vertical or horizontal widget stacking</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Custom delta comparisons across any number of periods</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Target progress tracking with customizable target lines</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Full-period and last-period calculation modes</div>
+                <div class="setup-feat"><svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="var(--setup-accent)" stroke-width="1.5"/><path d="M5 8l2 2 4-4" stroke="var(--setup-accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Fully customizable tooltips, reference lines, and formatting defaults</div>
+              </div>
+            </div>
+            <p class="setup-tip"><b>Tip:</b> Your saved defaults are <b>worksheet-based</b> and will persist even after closing and reopening the workbook. To carry your defaults to another worksheet, <b>duplicate the worksheet</b> rather than adding the extension from scratch. Each worksheet maintains its own independent defaults.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card-header hidden" id="cardHeader">
+        <div class="metric-row">
+          <div class="metric-meta">
+            <span class="metric-accent" id="metricAccent"></span>
+            <span class="kpi-label" id="kpiLabel">Metric</span>
+          </div>
+          <button class="gear-btn" id="gearBtn" title="Format Extension"><svg viewBox="0 0 24 24" fill="#666" xmlns="http://www.w3.org/2000/svg"><path d="M12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7zm7.43-2.53c.04-.32.07-.64.07-.97s-.03-.66-.07-.97l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.67-.97l-.38-2.65A.49.49 0 0 0 14.02 2h-4a.49.49 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.59-1.67.97l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.49.49 0 0 0 .12.64L4.57 11c-.04.32-.07.65-.07.97s.03.66.07.97l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.39.3.61.22l2.49-1c.52.38 1.06.72 1.67.97l.38 2.65c.05.24.26.42.49.42h4c.24 0 .44-.18.49-.42l.38-2.65c.61-.25 1.17-.59 1.67-.97l2.49 1c.22.08.49 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64l-2.11-1.65z"/></svg></button>
+          <img class="metric-icon hidden" id="metricIcon" alt="Metric icon" />
+        </div>
+        <div class="divider-line" id="dividerLine"></div>
+      </div>
+      <div class="carousel-viewport hidden" id="carouselViewport">
+        <div class="carousel-strip" id="carouselStrip"></div>
+      </div>
+      <div class="pagination hidden" id="pagination">
+        <button class="pag-btn" id="pagPrev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <span class="pag-indicator" id="pagIndicator">1/1</span>
+        <button class="pag-btn" id="pagNext"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></button>
+      </div>
+    </div>
+  </div>
+  <div class="chart-tooltip" id="chartTooltip"></div>
+  <script src="./kpi-card.js"></script>
+</body>
+</html>
