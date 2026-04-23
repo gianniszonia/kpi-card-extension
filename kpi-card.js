@@ -1254,7 +1254,8 @@
         var r=RENDERERS[widget.type];if(!r)return;
         var slot=document.createElement('div');
         var canFlex=isFlexibleWidget(widget.type)&&idx>lastFixed;
-        slot.className='widget-slot'+(canFlex?' chart-slot':'')+(widget.type==='divider-line'?' divider-slot':'');
+        var isBarOrWaterfall=widget.type==='bar-chart'||widget.type==='waterfall';
+        slot.className='widget-slot'+(canFlex?' chart-slot':'')+(isBarOrWaterfall?' has-chart':'')+(widget.type==='divider-line'?' divider-slot':'');
         pe.appendChild(slot);
         var resolvedSettings=getResolvedWidgetSettings(cfg,widget.type,widget.settings||{});
         slotInfos.push({widget:widget,slot:slot,renderer:r,settings:Object.assign({},resolvedSettings,{measure:'',targetMeasure:(resolvedSettings&&resolvedSettings.targetMeasure)||g.targetMeasure||''}),canFlex:canFlex,useSync:!!(globalSync&&widget.type!=='funnel-chart'&&widget.type!=='divider-line'),syncedAb:syncedAb,syncedRawData:syncedRawData});
